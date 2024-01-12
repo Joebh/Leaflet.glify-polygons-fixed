@@ -141,6 +141,7 @@ export class Lines extends BaseGlLayer<ILinesSettings> {
     let weightFn: WeightCallback | null = null;
     let chosenColor: color.IColor;
     let featureIndex = 0;
+    let coordinates: any;
 
     if (typeof color === "function") {
       colorFn = color;
@@ -165,20 +166,29 @@ export class Lines extends BaseGlLayer<ILinesSettings> {
         ? weightFn(featureIndex, feature)
         : (weight as number);
 
-      const featureVertices = new LineFeatureVertices({
-        project,
-        latitudeKey,
-        longitudeKey,
-        color: chosenColor,
-        weight: chosenWeight,
-        opacity,
-        mapCenterPixels,
-      });
+      // coorinates Array Structure depends on whether feature is multipart or not.
+      // Multi: [ [[],[],[]...], [[],[],[]...], [[],[],[]...]... ], Single: [ [[],[],[]...] ]
+      // Wrap Single Array to treat two types with same method
+      coordinates = (feature.geometry || feature).coordinates;
+      if (feature.geometry.type !== "MultiLineString") {
+        coordinates = [coordinates];
+      }
 
-      featureVertices.fillFromCoordinates(feature.geometry.coordinates);
-      vertices.push(featureVertices);
-      if (eachVertex) {
-        eachVertex(featureVertices);
+      for (const num in coordinates) {
+        const featureVertices = new LineFeatureVertices({
+          project: map.project.bind(map),
+          latitudeKey,
+          longitudeKey,
+          color: chosenColor,
+          weight: chosenWeight,
+          opacity,
+          mapCenterPixels,
+        });
+        featureVertices.fillFromCoordinates(coordinates[num]);
+        vertices.push(featureVertices);
+        if (eachVertex) {
+          eachVertex(featureVertices);
+        }
       }
     }
 
@@ -249,7 +259,10 @@ export class Lines extends BaseGlLayer<ILinesSettings> {
     gl.vertexAttrib1f(aPointSize, pointSize);
     mapMatrix.setSize(canvas.width, canvas.height).scaleTo(scale);
     if (zoom > 18) {
-      mapMatrix.translateTo((-offset.x + mapCenterPixels.x), (-offset.y + mapCenterPixels.y));
+      mapMatrix.translateTo(
+        -offset.x + mapCenterPixels.x,
+        -offset.y + mapCenterPixels.y
+      );
       // -- attach matrix value to 'mapMatrix' uniform in shader
       gl.uniformMatrix4fv(matrix, false, mapMatrix.array);
 
@@ -260,8 +273,8 @@ export class Lines extends BaseGlLayer<ILinesSettings> {
         for (let xOffset = -weight; xOffset <= weight; xOffset += 0.5) {
           // -- set base matrix to translate canvas pixel coordinates -> webgl coordinates
           mapMatrix.translateTo(
-            (-offset.x + mapCenterPixels.x) + xOffset / scale,
-            (-offset.y + mapCenterPixels.y) + yOffset / scale
+            -offset.x + mapCenterPixels.x + xOffset / scale,
+            -offset.y + mapCenterPixels.y + yOffset / scale
           );
           // -- attach matrix value to 'mapMatrix' uniform in shader
           gl.uniformMatrix4fv(matrix, false, mapMatrix.array);
@@ -289,8 +302,8 @@ export class Lines extends BaseGlLayer<ILinesSettings> {
           ) {
             // -- set base matrix to translate canvas pixel coordinates -> webgl coordinates
             mapMatrix.translateTo(
-              (-offset.x + mapCenterPixels.x) + xOffset / scale,
-              (-offset.y + mapCenterPixels.y) + yOffset / scale
+              -offset.x + mapCenterPixels.x + xOffset / scale,
+              -offset.y + mapCenterPixels.y + yOffset / scale
             );
             // -- attach matrix value to 'mapMatrix' uniform in shader
             gl.uniformMatrix4fv(this.matrix, false, mapMatrix.array);
